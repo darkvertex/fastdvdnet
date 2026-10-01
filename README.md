@@ -113,6 +113,35 @@ train_fastdvdnet.py \
 * run with *--help* to see details on all input parameters
 
 
+## Replicate
+
+`cog.yaml` and `predict.py` expose a video-in / video-out API. The predictor decodes the input with ffmpeg, denoises it with FastDVDnet, and encodes a new video. It does not add synthetic noise. `noise_sigma` is the noise level the network expects, in 8-bit units (divided by 255 internally), and must be between 5 and 55.
+
+| Input | Default | Notes |
+| --- | --- | --- |
+| `video` | | Input video file |
+| `noise_sigma` | 25 | 8-bit noise level, 5–55 |
+| `weights` | `gaussian` | `gaussian` (`model.pth`) or `clipped` (`model_clipped_noise.pth`) |
+| `codec` | `libx265` | `libx265`, `libx264`, `libvpx-vp9`, `prores_ks`, `ffv1` |
+| `crf` | 18 | Used for libx265, libx264, and VP9. Ignored for ProRes and FFV1 |
+
+| Codec | Container | Pixel format | Audio |
+| --- | --- | --- | --- |
+| `libx265` | MP4 | yuv420p | AAC |
+| `libx264` | MP4 | yuv420p | AAC |
+| `libvpx-vp9` | WebM | yuv420p | Opus |
+| `prores_ks` | MOV | yuv422p10le | PCM |
+| `ffv1` | MKV | yuv444p | PCM |
+
+Original audio is muxed back when the input has an audio stream. Frame rate is copied from the input.
+
+```
+cog predict -i video=@clip.mp4 -i noise_sigma=30 -i codec=libx265 -i crf=18
+```
+
+Pushes to Replicate go to `r8.im/darkvertex/fastdvdnet` from `.github/workflows/cog-release.yml`. That workflow needs a CLI auth token (not an `r8_` API token) in the `production` environment secret `REPLICATE_CLI_AUTH_TOKEN`.
+
+
 ## ABOUT
 
 Copying and distribution of this file, with or without modification,

@@ -1,0 +1,16 @@
+image: r8.im/darkvertex/fastdvdnet
+
+build:
+  gpu: true
+  cuda: "12.1"
+  python_version: "3.11"
+  system_packages:
+    - ffmpeg
+  python_requirements: replicate-requirements.txt
+  # Bake the checkpoints into the image so cold boots do no network I/O.
+  # These run before `COPY . /src`, so the weights layer is cached independently
+  # of code changes. Paths must be absolute: WORKDIR is not /src at this point.
+  run:
+    - mkdir -p /src/models && curl -fsSL -o /src/models/model.pth https://github.com/m-tassano/fastdvdnet/raw/c8fdf6182a0340e89dd18f5df25b47337cbede6f/model.pth && curl -fsSL -o /src/models/model_clipped_noise.pth https://github.com/m-tassano/fastdvdnet/raw/c8fdf6182a0340e89dd18f5df25b47337cbede6f/model_clipped_noise.pth && test "$(stat -c%s /src/models/model.pth)" -gt 9000000 && test "$(stat -c%s /src/models/model_clipped_noise.pth)" -gt 9000000
+
+predict: "predict.py:Predictor"

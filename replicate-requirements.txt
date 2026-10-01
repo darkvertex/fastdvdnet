@@ -1,0 +1,6 @@
+# Cog rewrites torch/torchvision to the CUDA 12.1 wheels when cog.yaml sets
+# gpu: true and cuda: "12.1". See pkg/config/torch_compatibility.json.
+torch==2.1.2
+torchvision==0.16.2
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
