@@ -19,6 +19,15 @@ from video_io import (
 )
 
 
+def test_predict_choice_literals_match_codec_table():
+    """Cog only accepts a list literal for Input choices, so predict.py cannot
+    reference CODECS directly. This keeps the two lists from drifting.
+    """
+    source = open(os.path.join(os.path.dirname(__file__), "..", "predict.py"), encoding="utf-8").read()
+    for name in CODECS:
+        assert f'"{name}"' in source
+
+
 def test_default_codec_is_libx265():
     assert DEFAULT_CODEC == "libx265"
     spec = get_codec(DEFAULT_CODEC)

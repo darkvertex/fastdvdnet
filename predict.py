@@ -7,7 +7,7 @@ import torch
 from cog import BasePredictor, Input, Path
 
 from infer_video import WEIGHTS, denoise_video, load_model, weights_dir
-from video_io import CODECS, DEFAULT_CODEC, DEFAULT_CRF, get_codec, output_name
+from video_io import DEFAULT_CODEC, DEFAULT_CRF, get_codec, output_name
 
 
 class Predictor(BasePredictor):
@@ -33,12 +33,14 @@ class Predictor(BasePredictor):
         weights: str = Input(
             description="gaussian uses model.pth. clipped uses model_clipped_noise.pth for clipped AWGN.",
             default="gaussian",
-            choices=list(WEIGHTS),
+            # Cog resolves choices from the source literal. Keep this in sync with WEIGHTS.
+            choices=["gaussian", "clipped"],
         ),
         codec: str = Input(
             description="Output video codec. libx265 and libx264 write MP4, VP9 writes WebM, ProRes writes MOV, FFV1 writes MKV.",
             default=DEFAULT_CODEC,
-            choices=list(CODECS),
+            # Cog resolves choices from the source literal. Keep this in sync with CODECS.
+            choices=["libx265", "libx264", "libvpx-vp9", "prores_ks", "ffv1"],
         ),
         crf: int = Input(
             description="Quality for libx265, libx264, and VP9. Lower is higher quality. Ignored for ProRes and FFV1.",

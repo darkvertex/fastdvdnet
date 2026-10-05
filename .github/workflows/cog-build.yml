@@ -88,4 +88,4 @@ jobs:
           python -m pip install "pytest>=8.0.0"
 
       - name: pytest
-        run: python -m pytest -q
+        run: python -m pytest -q tests
