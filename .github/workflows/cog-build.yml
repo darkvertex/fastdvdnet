@@ -44,6 +44,10 @@ jobs:
         run: |
           docker image inspect "$IMAGE_TAG" --format 'Image size: {{ .Size }} bytes'
 
+      # ubuntu-latest does not ship ffmpeg. The Cog image has it; this is for the sample clip and ffprobe.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Generate sample video
         run: |
           ffmpeg -y -hide_banner \
@@ -81,6 +85,9 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install test dependencies
         run: |
