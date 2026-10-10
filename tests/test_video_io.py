@@ -9,6 +9,7 @@ from video_io import (
     DEFAULT_CODEC,
     DEFAULT_CRF,
     build_encode_args,
+    decode_frame_args,
     decode_frames,
     encode_frames,
     extract_audio,
@@ -174,6 +175,12 @@ def test_ffmpeg_round_trip(name):
         )
         assert os.path.getsize(output) > 0
         assert probe_codec_name(output) == spec.probe_codec
+
+
+def test_decode_uses_vsync_passthrough():
+    args = decode_frame_args("in.mp4", "frames")
+    assert args[args.index("-vsync") + 1] == "0"
+    assert "-fps_mode" not in args
 
 
 def test_decode_preserves_frame_count_and_muxes_audio():

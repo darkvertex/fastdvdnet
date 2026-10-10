@@ -244,25 +244,29 @@ def has_audio(video_path: str) -> bool:
     return probe_audio_codec_name(video_path) is not None
 
 
+def decode_frame_args(video_path: str, frames_dir: str) -> list[str]:
+    # -vsync 0 is passthrough. The CUDA base image's ffmpeg predates
+    # -fps_mode (ffmpeg 5.1) and rejects that flag with "Option not found".
+    pattern = os.path.join(frames_dir, "%06d.png")
+    return [
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-i",
+        video_path,
+        "-vsync",
+        "0",
+        "-pix_fmt",
+        "rgb24",
+        "-start_number",
+        "0",
+        pattern,
+    ]
+
+
 def decode_frames(video_path: str, frames_dir: str) -> int:
     os.makedirs(frames_dir, exist_ok=True)
-    pattern = os.path.join(frames_dir, "%06d.png")
-    run_checked(
-        [
-            "ffmpeg",
-            "-y",
-            "-hide_banner",
-            "-i",
-            video_path,
-            "-fps_mode",
-            "passthrough",
-            "-pix_fmt",
-            "rgb24",
-            "-start_number",
-            "0",
-            pattern,
-        ]
-    )
+    run_checked(decode_frame_args(video_path, frames_dir))
     frames = [
         name
         for name in os.listdir(frames_dir)
