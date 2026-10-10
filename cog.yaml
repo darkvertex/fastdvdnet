@@ -11,6 +11,9 @@ build:
   # These run before `COPY . /src`, so the weights layer is cached independently
   # of code changes. Paths must be absolute: WORKDIR is not /src at this point.
   run:
+    # cog-base already lists ffmpeg, so system_packages drops it and the base
+    # build may not include libx265. Install the distro package explicitly.
+    - apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
     - mkdir -p /src/models && curl -fsSL -o /src/models/model.pth https://github.com/m-tassano/fastdvdnet/raw/c8fdf6182a0340e89dd18f5df25b47337cbede6f/model.pth && curl -fsSL -o /src/models/model_clipped_noise.pth https://github.com/m-tassano/fastdvdnet/raw/c8fdf6182a0340e89dd18f5df25b47337cbede6f/model_clipped_noise.pth && test "$(stat -c%s /src/models/model.pth)" -gt 9000000 && test "$(stat -c%s /src/models/model_clipped_noise.pth)" -gt 9000000
 
 predict: "predict.py:Predictor"

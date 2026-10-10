@@ -7,7 +7,7 @@ import torch
 from cog import BasePredictor, Input, Path
 
 from infer_video import WEIGHTS, denoise_video, load_model, weights_dir
-from video_io import DEFAULT_CODEC, DEFAULT_CRF, get_codec, output_name
+from video_io import get_codec, output_name
 
 
 class Predictor(BasePredictor):
@@ -38,13 +38,15 @@ class Predictor(BasePredictor):
         ),
         codec: str = Input(
             description="Output video codec. libx265 and libx264 write MP4, VP9 writes WebM, ProRes writes MOV, FFV1 writes MKV.",
-            default=DEFAULT_CODEC,
+            # Cog only accepts a literal default. Keep this equal to video_io.DEFAULT_CODEC.
+            default="libx265",
             # Cog resolves choices from the source literal. Keep this in sync with CODECS.
             choices=["libx265", "libx264", "libvpx-vp9", "prores_ks", "ffv1"],
         ),
         crf: int = Input(
             description="Quality for libx265, libx264, and VP9. Lower is higher quality. Ignored for ProRes and FFV1.",
-            default=DEFAULT_CRF,
+            # Cog only accepts a literal default. Keep this equal to video_io.DEFAULT_CRF.
+            default=18,
             ge=0,
             le=51,
         ),

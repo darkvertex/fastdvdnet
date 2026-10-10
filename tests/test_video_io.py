@@ -7,6 +7,7 @@ import pytest
 from video_io import (
     CODECS,
     DEFAULT_CODEC,
+    DEFAULT_CRF,
     build_encode_args,
     decode_frames,
     encode_frames,
@@ -26,6 +27,11 @@ def test_predict_choice_literals_match_codec_table():
     source = open(os.path.join(os.path.dirname(__file__), "..", "predict.py"), encoding="utf-8").read()
     for name in CODECS:
         assert f'"{name}"' in source
+    # Cog ignores non-literal defaults and then requires the input at predict time.
+    assert 'default="libx265"' in source
+    assert "default=18" in source
+    assert DEFAULT_CODEC == "libx265"
+    assert DEFAULT_CRF == 18
 
 
 def test_default_codec_is_libx265():

@@ -59,8 +59,8 @@ jobs:
       # No GPU on the runner: Cog logs "Missing device driver, re-trying without GPU"
       # and the predictor falls back to CPU. This verifies the weights are present
       # in the image (setup() must not need the network). Default codec is libx265.
-      - name: cog predict smoke test
-        run: cog predict "$IMAGE_TAG" -i video=@/tmp/sample.mp4 -o /tmp/output.mp4
+      - name: cog run smoke test
+        run: cog run "$IMAGE_TAG" -i video=@/tmp/sample.mp4 -o /tmp/output.mp4
 
       - name: Validate output
         run: |
