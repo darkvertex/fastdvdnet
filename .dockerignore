@@ -1,0 +1,26 @@
+# The .dockerignore file excludes files from the container build process.
+#
+# https://docs.docker.com/engine/reference/builder/#dockerignore-file
+
+# Exclude Git files
+**/.git
+**/.github
+**/.gitignore
+
+# Exclude Python cache files
+__pycache__
+.mypy_cache
+.pytest_cache
+.ruff_cache
+
+# Exclude Python virtual environment
+/venv
+/.venv
+
+# Weights are downloaded into the image by a `build.run` step in cog.yaml.
+# A local copy here would overwrite that layer via `COPY . /src`.
+models/*.pth
+*.pth
+
+# Tests are not used at inference time
+tests

@@ -1,0 +1,98 @@
+name: CI
+
+# Pull requests run pytest and a Cog image smoke test in parallel.
+# The Cog job builds the image exactly as release does, then runs one CPU
+# prediction to prove setup() works with the baked-in weights. Nothing is pushed.
+
+on:
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+  workflow_dispatch:
+
+env:
+  COG_VERSION: v0.22.0
+  IMAGE_TAG: fastdvdnet:ci
+
+jobs:
+  build:
+    name: cog build + smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # The image is large (CUDA base + torch). The checkpoints themselves are ~10 MB each.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          docker-images: false
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Cog
+        uses: ./.github/actions/setup-cog
+        with:
+          cog-version: ${{ env.COG_VERSION }}
+
+      - name: cog build
+        run: cog build -t "$IMAGE_TAG"
+
+      - name: Report image size
+        run: |
+          docker image inspect "$IMAGE_TAG" --format 'Image size: {{ .Size }} bytes'
+
+      # ubuntu-latest does not ship ffmpeg. The Cog image has it; this is for the sample clip and ffprobe.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Generate sample video
+        run: |
+          ffmpeg -y -hide_banner \
+            -f lavfi -i "testsrc=size=64x48:rate=10:duration=0.5" \
+            -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=0.5" \
+            -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac \
+            /tmp/sample.mp4
+
+      # No GPU on the runner: Cog logs "Missing device driver, re-trying without GPU"
+      # and the predictor falls back to CPU. This verifies the weights are present
+      # in the image (setup() must not need the network). Default codec is libx265.
+      - name: cog run smoke test
+        run: cog run "$IMAGE_TAG" -i video=@/tmp/sample.mp4 -o /tmp/output.mp4
+
+      - name: Validate output
+        run: |
+          codec=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 /tmp/output.mp4)
+          echo "video codec: $codec"
+          test "$codec" = "hevc"
+          audio=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 /tmp/output.mp4)
+          echo "audio codec: $audio"
+          test "$audio" = "aac"
+          test -s /tmp/output.mp4
+
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pytest>=8.0.0"
+
+      - name: pytest
+        run: python -m pytest -q tests

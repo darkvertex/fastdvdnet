@@ -1,0 +1,43 @@
+name: Setup Cog
+description: Install Docker Buildx (Node 24) and Cog, optionally log in to Replicate.
+
+# Local stand-in for replicate/setup-cog@v2. Upstream still pins
+# docker/setup-buildx-action v3.3.0 (Node 20). Keep driver: docker so Cog
+# loads locally-built images instead of trying a remote registry
+# (replicate/setup-cog#2 / v2.0.2).
+
+inputs:
+  token:
+    description: Replicate CLI auth token. If set, runs `cog login`.
+    required: false
+    default: ""
+  cog-version:
+    description: Cog release tag to install (for example v0.22.0).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+      with:
+        driver: docker
+
+    - name: Install Cog
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo curl -fsSL -o /usr/local/bin/cog \
+          "https://github.com/replicate/cog/releases/download/${{ inputs.cog-version }}/cog_Linux_x86_64"
+        sudo chmod +x /usr/local/bin/cog
+        cog --version
+
+    - name: Log in to Replicate
+      if: inputs.token != ''
+      shell: bash
+      env:
+        REPLICATE_CLI_AUTH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        echo "Logging in to Replicate..." >&2
+        echo "$REPLICATE_CLI_AUTH_TOKEN" | cog login --token-stdin

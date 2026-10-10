@@ -1,0 +1,93 @@
+name: Release to Replicate
+
+# Builds the Cog image and pushes it to Replicate whenever master changes.
+#
+# Requires the secret REPLICATE_CLI_AUTH_TOKEN on the "production" GitHub
+# Environment (Settings > Environments > production). Copy the token from
+# https://replicate.com/auth/token (the same page `cog login` opens).
+#
+# This must be a CLI auth token, NOT an API token from
+# https://replicate.com/account/api-tokens: `cog login` rejects anything
+# starting with "r8_" and there is no other way to authenticate `cog push`.
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - ".github/workflows/cog-build.yml"
+  workflow_dispatch:
+    inputs:
+      model_name:
+        description: 'Model to push to, like "alice/bunny-detector". Defaults to `image` in cog.yaml.'
+        required: false
+
+env:
+  COG_VERSION: v0.22.0
+
+# Never run two releases at once; a queued run waits for the current one.
+concurrency:
+  group: release-replicate
+  cancel-in-progress: false
+
+jobs:
+  push_to_replicate:
+    name: cog build + cog push
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Environment-scoped secrets are only exposed to jobs that declare the environment.
+    # This also records each push on the repo's Deployments page.
+    environment:
+      name: production
+      url: https://replicate.com/${{ inputs.model_name || 'darkvertex/fastdvdnet' }}
+
+    steps:
+      - name: Check Replicate credentials
+        env:
+          REPLICATE_CLI_AUTH_TOKEN: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
+        run: |
+          if [ -z "$REPLICATE_CLI_AUTH_TOKEN" ]; then
+            echo "::error::Secret REPLICATE_CLI_AUTH_TOKEN is not available. Copy the CLI auth token from https://replicate.com/auth/token and add it to the 'production' GitHub Environment (Settings > Environments)."
+            exit 1
+          fi
+          # Fail here rather than after several minutes of disk cleanup: cog login
+          # refuses API tokens, which all start with "r8_".
+          case "$REPLICATE_CLI_AUTH_TOKEN" in
+            r8_*)
+              echo "::error::Secret REPLICATE_CLI_AUTH_TOKEN is a Replicate API token (r8_...), which 'cog login' does not accept. Replace it with the CLI auth token from https://replicate.com/auth/token."
+              exit 1
+              ;;
+          esac
+
+      # The image is large (CUDA base + torch). The checkpoints themselves are ~10 MB each.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          docker-images: false
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Installs Docker Buildx and Cog, and runs `cog login` with the token.
+      - name: Setup Cog
+        uses: ./.github/actions/setup-cog
+        with:
+          token: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
+          cog-version: ${{ env.COG_VERSION }}
+
+      - name: cog build
+        run: cog build
+
+      # `cog push` reuses the layers just built, so this only uploads.
+      - name: cog push
+        env:
+          MODEL_NAME: ${{ inputs.model_name }}
+        run: |
+          if [ -n "$MODEL_NAME" ]; then
+            cog push "r8.im/$MODEL_NAME"
+          else
+            cog push
+          fi
