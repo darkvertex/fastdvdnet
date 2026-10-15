@@ -142,6 +142,66 @@ cog predict -i video=@clip.mp4 -i noise_sigma=30 -i codec=libx265 -i crf=18
 Pushes to Replicate go to `r8.im/darkvertex/fastdvdnet` from `.github/workflows/cog-release.yml`. That workflow needs a CLI auth token (not an `r8_` API token) in the `production` environment secret `REPLICATE_CLI_AUTH_TOKEN`.
 
 
+## Runpod Serverless
+
+`Dockerfile` and `handler.py` are a second entrypoint for Runpod. `cog build` does not use the Dockerfile, and the Cog predictor is unchanged.
+
+The worker loads both checkpoints once, then denoises with the same fields as the Replicate API. It does not add a runtime deadline. ffmpeg and the model run until they finish or Runpod stops the job.
+
+Runpod's endpoint default is still 10 minutes (`executionTimeout` 600000 ms). Set **Execution timeout** and **Job TTL** to 7 days in the endpoint Advanced settings. That is the platform maximum, `604800000` ms. TTL includes time spent in the queue, so a shorter TTL can delete a job that is still running. A stuck job can be billed until that ceiling.
+
+Submit long clips with `/run`, then poll `/status` or set `webhook`. `/runsync` holds the HTTP connection and only keeps its result for about a minute. `/run` keeps a finished result for about 30 minutes, so large outputs should be uploaded to S3.
+
+```json
+{
+  "input": {
+    "video": "https://example.com/clip.mp4",
+    "noise_sigma": 30,
+    "weights": "gaussian",
+    "codec": "libx265",
+    "crf": 18
+  },
+  "policy": {
+    "executionTimeout": 604800000,
+    "ttl": 604800000
+  }
+}
+```
+
+| Input | Default | Notes |
+| --- | --- | --- |
+| `video` | | `http` or `https` URL, base64, `data:*;base64,...`, or a local path on the worker |
+| `noise_sigma` | 25 | 8-bit noise level, 5–55 |
+| `weights` | `gaussian` | `gaussian` or `clipped` |
+| `codec` | `libx265` | `libx265`, `libx264`, `libvpx-vp9`, `prores_ks`, `ffv1` |
+| `crf` | 18 | Used for libx265, libx264, and VP9 |
+
+`video` downloads use a 60 second connect timeout and no read deadline. The input must be at most 32 GiB. Decoded frames are written as PNGs under `/tmp`, so the worker disk has to hold those frames plus the output file.
+
+To try the handler on a machine that already has the checkpoints, ffmpeg, and the Python dependencies:
+
+```
+python handler.py --test_input '{"input": {"video": "/path/to/clip.mp4", "noise_sigma": 30}}'
+```
+
+The result is JSON:
+
+| Field | Notes |
+| --- | --- |
+| `video` | Presigned URL, or base64 when no bucket is configured |
+| `encoding` | `url` or `base64` |
+| `content_type` | From the output container |
+| `filename` | `fastdvdnet.<container>` |
+
+Base64 is returned only when the encoded body is at most 7 MiB. Larger files need a bucket. Set `BUCKET_ENDPOINT_URL`, `BUCKET_ACCESS_KEY_ID`, `BUCKET_SECRET_ACCESS_KEY`, and `BUCKET_NAME` on the endpoint, or pass `s3Config` (`endpointUrl`, `accessId`, `accessSecret`, `bucketName`) on the job. A per-job `s3Config` wins.
+
+```
+docker build --platform linux/amd64 -t fastdvdnet-runpod .
+```
+
+The image is `pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime` plus ffmpeg. It bakes the same two checkpoints as the Cog image. Push the tag to a registry and create a Runpod Serverless endpoint from it. The container command is `python -u handler.py`.
+
+
 ## ABOUT
 
 Copying and distribution of this file, with or without modification,
