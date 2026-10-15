@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+from collections.abc import Callable
 
 import cv2
 import numpy as np
@@ -61,7 +62,7 @@ def _load_state_dict(path: str, device: torch.device) -> dict:
 def load_model(path: str, device: torch.device) -> torch.nn.Module:
     if not os.path.isfile(path):
         raise RuntimeError(
-            f"Missing weights at {path}. The Cog image bakes them in during build."
+            f"Missing weights at {path}. Bake the checkpoints into the image or set FASTDVDNET_WEIGHTS_DIR."
         )
     model = FastDVDnet(num_input_frames=5)
     model.load_state_dict(_load_state_dict(path, device))
@@ -105,12 +106,16 @@ def denoise_video(
     codec: str,
     crf: int,
     chunk_size: int = CHUNK_SIZE,
+    on_chunk: Callable[[int, int], None] | None = None,
 ) -> str:
     """Denoise ``video_path`` and write ``output_path``.
 
     ``noise_sigma`` is the 8-bit noise level (the CLI's ``--noise_sigma``).
     It is divided by 255 before it is passed to the network. The input frames
     are denoised as they are; no synthetic noise is added.
+
+    ``on_chunk`` is called as ``on_chunk(done, total)`` after each temporal
+    chunk is written. The Cog predictor leaves it unset.
     """
     if noise_sigma < 5 or noise_sigma > 55:
         raise ValueError("noise_sigma must be between 5 and 55")
@@ -133,9 +138,9 @@ def denoise_video(
         mux_audio = extract_audio(video_path, audio_path)
         noise_std = torch.tensor([noise_sigma / 255.0], dtype=torch.float32, device=device)
 
-        for load_start, load_end, keep_start, keep_end in iter_frame_chunks(
-            n_frames, chunk_size, CHUNK_CONTEXT
-        ):
+        chunks = list(iter_frame_chunks(n_frames, chunk_size, CHUNK_CONTEXT))
+        total_chunks = len(chunks)
+        for done, (load_start, load_end, keep_start, keep_end) in enumerate(chunks, start=1):
             paths = [_frame_path(in_dir, index) for index in range(load_start, load_end)]
             sequence = load_frames(paths, device)
             with torch.no_grad():
@@ -150,6 +155,8 @@ def denoise_video(
                 if frame_index >= source_frames:
                     continue
                 save_frame(denoised[rel_start + offset], _frame_path(out_dir, frame_index))
+            if on_chunk is not None:
+                on_chunk(done, total_chunks)
 
         encode_frames(
             frame_pattern=os.path.join(out_dir, "%06d.png"),
